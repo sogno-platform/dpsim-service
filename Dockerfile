@@ -73,12 +73,6 @@ RUN pip3 install --no-cache-dir flake8
 
 RUN mkdir -p /usr/src/app
 WORKDIR /usr/src/app
-
-COPY requirements-cimpy.txt /usr/src/app/
-RUN pip3 install --no-cache-dir -r requirements-cimpy.txt
-
-RUN pip3 install redis
-
 COPY . /usr/src/app
 
 EXPOSE 8080
