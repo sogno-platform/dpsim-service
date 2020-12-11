@@ -122,6 +122,34 @@ paths:
               schema:
                 $ref: "#/components/schemas/Error"
 
+  /analysis/{id}/debug:
+    get:
+      tags:
+        - Static Analysis
+      summary: Get specific analysis logs
+      operationId: dpsimadapter.get_debug_logs
+      parameters:
+        - name: id
+          description: Analysis id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: OK
+          content:
+            text/plain:
+              schema:
+                description: Archive containing result and log files, e.g. CSV
+                type: string
+                format: binary
+        default:
+          description: unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
 
   /analysis/{id}:
     get:
