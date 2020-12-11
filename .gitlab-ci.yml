@@ -1,6 +1,6 @@
 variables:
     DOCKER_TAG_DEV: ${CI_COMMIT_REF_NAME}
-    DOCKER_IMAGE_DEV: cimpy
+    DOCKER_IMAGE_DEV: dpsim-service
 
 stages:
 - prepare
@@ -14,18 +14,6 @@ docker:
     tags:
         - shell
         - linux
-
-
-test-cimadapter:
-    stage: test
-    script:
-        - pytest -v -cov --junitxml=report.xml test/test_network_models_controller.py
-    image: ${DOCKER_IMAGE_DEV}:${DOCKER_TAG_DEV}
-    tags:
-        - docker
-    artifacts:
-        reports:
-            junit: report.xml
 
 test-dpsimadapter:
     stage: test
