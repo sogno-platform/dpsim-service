@@ -1,14 +1,23 @@
 from models.analysis_response import AnalysisResponse  # noqa: E501
-from flask import make_response
-import os, traceback, sys, time
-import connexion
-import tempfile
 from multiprocessing import Pool, Array, Queue, Manager
-from enum import Enum
-from glob import glob
+from flask import make_response
+from enum  import Enum
+from glob  import glob
+import os, traceback, tempfile
+import connexion
+import requests
 
 import dpsimpy
-import model_db
+
+def ok_func(arg):
+    filep = open("debug/callback.out", "w")
+    filep.write(str(arg))
+    filep.close()
+
+def error_func(arg):
+    filep = open("debug/callback.err", "w")
+    filep.write(str(arg))
+    filep.close()
 
 class TaskExecutor:
     """
@@ -36,15 +45,17 @@ class TaskExecutor:
         error = 4
 
     def __init__(self):
-        self.out = open(str(os.getpid()) + ".main.out", "w")
-        self.err = open(str(os.getpid()) + ".main.err", "w")
-        self.out.write("Starting")
+        if not os.path.exists('debug'):
+            os.makedirs('debug')
+        self.out = open("debug/main.out", "w")
+        self.err = open("debug/main.err", "w")
+        self.log("Starting")
         self.tasks = []
         self.manager = Manager()
         self.run_queue = self.manager.Queue()
         self.pool = Pool(processes=TaskExecutor.num_procs)
         for i in range(TaskExecutor.num_procs):
-            self.pool.apply_async(TaskExecutor.wait_for_run_command, (self.run_queue,))
+            self.pool.apply_async(TaskExecutor.wait_for_run_command, (self.run_queue,), callback=ok_func, error_callback=error_func)
 
     def close(self):
         self.pool.close()
@@ -55,9 +66,13 @@ class TaskExecutor:
     def __del__(self):
         self.close()
 
+    def log(self, message):
+        self.out.write(message + "\n")
+        self.out.flush()
+
     def error(self, message):
-        self.err.write(message)
-        print(message)
+        self.err.write(message + "\n")
+        self.err.flush()
 
     @staticmethod
     def get_task_executor():
@@ -72,6 +87,7 @@ class TaskExecutor:
         params['analysis_id'] = analysis_id
         self.tasks.append(params)
         TaskExecutor.status_list[analysis_id] = TaskExecutor.Status.requested.value
+        self.log("Putting request for analysis " + str(analysis_id) + " on run queue.")
         self.run_queue.put(self.tasks[analysis_id])
         return analysis_id
 
@@ -80,25 +96,48 @@ class TaskExecutor:
         if TaskExecutor.max_analysis > analysis_id:
             return TaskExecutor.Status(TaskExecutor.status_list[analysis_id]).name
         else:
-            self.error("No analysis found with id: " + analysis_id)
+            self.error("No analysis found with id: " + str(analysis_id))
             return -1
 
-    def get_logs(self, analysis_id):
+    def get_analysis_logs(self, analysis_id):
         if analysis_id >= len(self.tasks):
             return "Analysis id not recognised: " + str(analysis_id) + os.linesep
 
         analysis_name = "Analysis_" + str(analysis_id)
         files = glob( "logs/" + analysis_name + "_*.log")
-        files.append("logs/" + analysis_name + ".log")
-        logs = ""
+        files += glob( "logs/" + analysis_name + ".log")
+        log_string = ""
         for file_ in files:
             try:
                 with open(file_) as f:
-                    logs += os.linesep + file_ + ":" + os.linesep + os.linesep + f.read()
+                    log_string += os.linesep + file_ + ":" + os.linesep + os.linesep + f.read()
             except Exception as e:
-                logs = "Failed to read: " + file_
+                log_files = glob( "logs/*")
+                log_string = "Failed to read: " + file_ + " because: " + e + "\n"
+                log_string += "Content of log dir: " + str(log_files) + "\n"
                 self.error("Failed to read: " + file_)
-        return logs
+        return log_string
+
+    def get_debug_logs(self, analysis_id):
+        if analysis_id >= len(self.tasks):
+            return "Analysis id not recognised: " + str(analysis_id) + os.linesep
+
+        analysis_name = "Analysis_" + str(analysis_id)
+        files = glob( "debug/" + analysis_name + ".*")
+        files += glob( "debug/callback.*")
+        files += glob( "debug/main.*")
+        log_string = ""
+        for file_ in files:
+            try:
+                with open(file_) as f:
+                    log_string += os.linesep + file_ + ":" + os.linesep + os.linesep + f.read()
+            except Exception as e:
+                log_files = glob( "debug/*")
+                log_string = "Failed to read: " + file_ + " because: " + e + "\n"
+                log_string += "Content of debug dir: " + str(log_files) + "\n"
+                self.error("Failed to read: " + file_)
+        return log_string
+
 
     def get_results(self, analysis_id):
         if analysis_id >= len(self.tasks):
@@ -117,28 +156,31 @@ class TaskExecutor:
     @staticmethod
     def wait_for_run_command(queue):
         while True:
-            out = open(str(os.getpid()) + ".out", "w")
-            err = open(str(os.getpid()) + ".err", "w")
             msg = queue.get()
             analysis_id = msg['analysis_id']
+            out = open("debug/" + "Analysis_" + str(analysis_id) + ".out", "w")
+            err = open("debug/" + "Analysis_" + str(analysis_id) + ".err", "w")
             try:
                 model_id = msg['model_id']
                 name = msg['name']
                 analysis_name = "Analysis_" + str(analysis_id)
-                out.write("run analysis: " + str(analysis_id))
+                out.write("Running analysis: " + str(analysis_id) + "\n")
                 TaskExecutor.status_list[analysis_id] = TaskExecutor.Status.running.value
                 logger = dpsimpy.Logger(analysis_name)
-                model = model_db.get_model(model_id)
-                files = model.files
+                url = "http://cimpy-server:8080/models/"+str(model_id)+"/export"
+                response = requests.get(url)
+                out.write("Response: " + str(response) + "\n")
+                json_str = str(response.json())
+                truncated_response = (json_str[:75] + '..') if len(json_str) > 75 else json_str
+                out.write("Response json: " + truncated_response + "\n")
+                files = response.json()
 
                 # prepare the files for dpsim to read. we should make dpsim accept data blobs.
                 # however, that requires work in 3 projects and a technical discussion first.
                 filenames = []
-                for filedata in model.files:
-                    fp, path = tempfile.mkstemp(suffix=".xml", prefix=None, dir=None, text=True)
-                    filedata.seek(0)
-                    data = filedata.read()
-                    os.write(fp, data);
+                for filedata in files:
+                    fp, path = tempfile.mkstemp(suffix=".xml", text=True)
+                    os.write(fp, bytes(filedata, "utf-8"));
                     os.close(fp);
                     filenames.append(path)
 
@@ -163,6 +205,7 @@ class TaskExecutor:
             except Exception as e:
                 TaskExecutor.status_list[analysis_id] = TaskExecutor.Status.error.value
                 err.write("analysis failed: " + str(analysis_id) + " with: " + str(e))
+                traceback.print_exc(file=err)
             finally:
                 err.close()
                 out.close()
@@ -172,9 +215,12 @@ def add_analysis():  # noqa: E501
      # noqa: E501
     :rtype: AnalysisResponse
     """
+    taskExecutor = TaskExecutor.get_task_executor()
     model_id = connexion.request.json['modelid']
+    taskExecutor.log("Analysis requested for model id: " + str(model_id))
     name = connexion.request.json['name']
     analysis_id = TaskExecutor.get_task_executor().request_analysis({ "model_id": model_id, "name": name })
+    taskExecutor.log("Analysis requested with id: " + str(analysis_id))
     connexion.request.json['analysis_id'] = analysis_id
     return connexion.request.json
 
@@ -241,6 +287,21 @@ def get_analysis_logs(id_):  # noqa: E501
     :rtype: AnalysisResponse
     """
     taskExecutor = TaskExecutor.get_task_executor()
-    response = make_response(taskExecutor.get_logs(id_))
+    response = make_response(taskExecutor.get_analysis_logs(id_))
+    response.mimetype = "text/plain"
+    return response
+
+def get_debug_logs(id_):  # noqa: E501
+    """Get specific analysis status and results
+
+     # noqa: E501
+
+    :param id: Analysis id
+    :type id: int
+
+    :rtype: AnalysisResponse
+    """
+    taskExecutor = TaskExecutor.get_task_executor()
+    response = make_response(taskExecutor.get_debug_logs(id_))
     response.mimetype = "text/plain"
     return response
