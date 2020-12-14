@@ -1,19 +1,23 @@
 variables:
     DOCKER_TAG_DEV: ${CI_COMMIT_REF_NAME}
     DOCKER_IMAGE_DEV: dpsim-service
+    DOCKER_FILE: ${CI_PROJECT_DIR}/Dockerfile
 
 stages:
 - prepare
 - test
 
-
-docker:
-    stage: prepare
-    script:
-        - docker build -t ${DOCKER_IMAGE_DEV}:${DOCKER_TAG_DEV} .
-    tags:
-        - shell
-        - linux
+prepare:
+  variables:
+    GIT_SUBMODULE_STRATEGY: none
+  stage: prepare
+  image:
+    name: gcr.io/kaniko-project/executor:debug
+    entrypoint: [ "" ]
+  script:
+    - mkdir -p /kaniko/.docker
+    - echo "{\"auths\":{\"$CI_REGISTRY\":{\"username\":\"$CI_REGISTRY_USER\",\"password\":\"$CI_REGISTRY_PASSWORD\"}}}" > /kaniko/.docker/config.json
+    - /kaniko/executor --context ${CI_PROJECT_DIR} --dockerfile ${DOCKER_FILE} --destination ${CI_REGISTRY_IMAGE}:${DOCKER_IMAGE_DEV}-base-image --cache=true --snapshotMode=redo --use-new-run
 
 test-dpsimadapter:
     stage: test
