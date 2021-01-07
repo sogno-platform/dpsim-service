@@ -21,3 +21,4 @@ setuptools >= 21.0.0
 flask_testing >= 0.8.0
 git+https://git.rwth-aachen.de/acs/public/cim/cimpy@master#egg=cimpy
 
+redis
