@@ -8,6 +8,26 @@ import connexion
 import requests
 
 import dpsimpy
+import results_db
+
+class LogFile:
+    def __init__(self, analysis_id, filename):
+        self.analysis_id = analysis_id
+        self.filename = filename
+        self.data = ""
+
+    def write(self, data):
+        self.data += data
+
+    def close(self):
+        results_db.add_log(self.analysis_id, self.filename, self.data)
+
+class ResultFile(LogFile):
+    def __init__(self, analysis_id, filename):
+        super().__init__(analysis_id, filename)
+
+    def close(self):
+        results_db.add_result(self.analysis_id, self.filename, self.data)
 
 def ok_func(arg):
     filep = open("debug/callback.out", "w")
@@ -99,25 +119,6 @@ class TaskExecutor:
             self.error("No analysis found with id: " + str(analysis_id))
             return -1
 
-    def get_analysis_logs(self, analysis_id):
-        if analysis_id >= len(self.tasks):
-            return "Analysis id not recognised: " + str(analysis_id) + os.linesep
-
-        analysis_name = "Analysis_" + str(analysis_id)
-        files = glob( "logs/" + analysis_name + "_*.log")
-        files += glob( "logs/" + analysis_name + ".log")
-        log_string = ""
-        for file_ in files:
-            try:
-                with open(file_) as f:
-                    log_string += os.linesep + file_ + ":" + os.linesep + os.linesep + f.read()
-            except Exception as e:
-                log_files = glob( "logs/*")
-                log_string = "Failed to read: " + file_ + " because: " + e + "\n"
-                log_string += "Content of log dir: " + str(log_files) + "\n"
-                self.error("Failed to read: " + file_)
-        return log_string
-
     def get_debug_logs(self, analysis_id):
         if analysis_id >= len(self.tasks):
             return "Analysis id not recognised: " + str(analysis_id) + os.linesep
@@ -138,28 +139,33 @@ class TaskExecutor:
                 self.error("Failed to read: " + file_)
         return log_string
 
+    def get_analysis_logs(self, analysis_id):
+        if analysis_id >= len(self.tasks):
+            return "Analysis id not recognised: " + str(analysis_id) + os.linesep
+
+        files = results_db.get_logs(analysis_id)
+        log_string = ""
+        for filename in files:
+            log_string += os.linesep + filename + ":" + os.linesep + os.linesep + files[filename]
+        return log_string
 
     def get_results(self, analysis_id):
         if analysis_id >= len(self.tasks):
             return "Analysis id not recognised: " + str(analysis_id) + os.linesep
 
-        analysis_name = "Analysis_" + str(analysis_id)
-        filename = "logs/" + analysis_name + ".csv"
-        logs = ""
-        try:
-            with open(filename) as f:
-                logs += os.linesep + filename + ":" + os.linesep + os.linesep + f.read()
-        except:
-            self.error("Failed to read: " + filename)
-        return logs
+        files = results_db.get_results(analysis_id)
+        log_string = ""
+        for filename in files:
+            log_string += os.linesep + filename + ":" + os.linesep + os.linesep + files[filename]
+        return log_string
 
     @staticmethod
     def wait_for_run_command(queue):
         while True:
             msg = queue.get()
             analysis_id = msg['analysis_id']
-            out = open("debug/" + "Analysis_" + str(analysis_id) + ".out", "w")
-            err = open("debug/" + "Analysis_" + str(analysis_id) + ".err", "w")
+            out = LogFile(analysis_id, "debug/" + "Analysis_" + str(analysis_id) + ".out")
+            err = LogFile(analysis_id, "debug/" + "Analysis_" + str(analysis_id) + ".err")
             try:
                 model_id = msg['model_id']
                 name = msg['name']
@@ -172,7 +178,7 @@ class TaskExecutor:
                 out.write("Response: " + str(response) + "\n")
                 json_str = str(response.json())
                 truncated_response = (json_str[:75] + '..') if len(json_str) > 75 else json_str
-                out.write("Response json: " + truncated_response + "\n")
+                out.write("Response json (truncated): " + truncated_response + "\n")
                 files = response.json()
 
                 # prepare the files for dpsim to read. we should make dpsim accept data blobs.
@@ -199,6 +205,24 @@ class TaskExecutor:
                 # clean up the files that we created
                 for tempname in filenames:
                     os.unlink(tempname)
+
+                analysis_name = "Analysis_" + str(analysis_id)
+                log_filename = "logs/" + analysis_name + ".log"
+                result_filename = "logs/" + analysis_name + ".csv"
+                try:
+                    result_file = ResultFile(analysis_id, result_filename)
+                    with open(result_filename) as f:
+                        result_file.write(f.read())
+                    result_file.close()
+                except Exception as e:
+                    self.error("Failed to save results: " + str(e))
+                try:
+                    log_file = LogFile(analysis_id, log_filename)
+                    with open(log_filename) as f:
+                        log_file.write(f.read())
+                    log_file.close()
+                except Exception as e:
+                    self.error("Failed to save log: " + str(e))
 
                 TaskExecutor.status_list[analysis_id] = TaskExecutor.Status.complete.value
 
