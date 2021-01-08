@@ -56,3 +56,23 @@ b8970ad2179969857ffd38767d3fb1567e522344 re-added apikey auth
 5d7c361fac3210a77fa1557bd25690d2133c1427 adapted operationID and removed not-relevant parts from the api
 23ec8610c19409ba184cc6de7b4378d51d01b224 Added podman command to run openapi generate
 abbfc49b65c8898b713583fe54fee6e2f1201f80 First draft api specification
+
+I, Richard Marston hereby sign-off-by all of my past commits to this repo subject to the Developer Certificate of Origin (DCO), Version 1.1. In the past I have used emails: rmarston@eonerc.rwth-aachen.de
+
+f6a144648dbb5e1d08463cb53cc43a73d295ba60 Split large run function up
+601b7d3107ee87dbedbcc25dc5eb09866e76a5a5 Store results and logs in redis
+93ac30dec95beb3dbc6989531154ce09c72fe365 Kaniko docker CI
+b7f79086c8af8fb4783dabdb6f83c5e2cea61c2a Remove cimpy tests
+a36b472663b4bab40e309f8faf77813099056636 Use cimpy endpoint to get model, new /debug endpoint
+c0c8e3f02f724477a9370c8dcf2d047a40073da8 Remove cimpy components
+72a807db201d358f481a4a8ac0adbea483ee3c5e Move utility script into /utils
+59deaad0792f166cb28da44779b67c3f2ccae0b7 Move redis test implementation into redis_stub
+1616be78a85a4ea60277d1e2c87829a040a91b08 Rename db to model_db
+8028c9efa1dbd3f9847b17dca709c19e6bbff5ac Implement asynchronous execution of dpsim and logs, results endpoints
+eafd6e0026eb43b65e15ec3078d21dfa2099ba9b Implement redis mock for pytest
+fad72e4ccdb0a56f4dc9f5b02afe5f1abaa21d61 Use redis for model db
+959820ea7332d065cd2fe37f9c859030a290305e Updates for broken tests
+52a9e06e8bea786553200350f0873869548874da Implement add_analysis using mkstemp for now
+600e42678e9b27ebdcd21a774bfab59f116409b0 Move db skeleton code into separate module
+460c5488c86cc7494d94719f4f4c93f53078801a Change add_analysis content header to application/json
+b524f12b018d3a68220393852b0a04b1acc1302f Update Dockerfile so that it builds dpsim python module
