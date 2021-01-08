@@ -39,6 +39,93 @@ def error_func(arg):
     filep.write(str(arg))
     filep.close()
 
+class SimRunner:
+    def __init__(self, msg):
+        self.analysis_id = msg['analysis_id']
+        self.name = msg['name']
+        self.out = LogFile(self.analysis_id, "debug/" + "Analysis_" + str(self.analysis_id) + ".out")
+        self.err = LogFile(self.analysis_id, "debug/" + "Analysis_" + str(self.analysis_id) + ".err")
+        self.model_id = msg['model_id']
+        self.analysis_name = "Analysis_" + str(self.analysis_id)
+
+    # This function writes the xml files to disk so that dpsim can read them in.
+    # This function should not be required when we have updated dpsim to accept
+    # the input files as in-memory data.
+    @staticmethod
+    def create_files(files):
+        filenames = []
+        for filedata in files:
+            fp, path = tempfile.mkstemp(suffix=".xml", text=True)
+            os.write(fp, bytes(filedata, "utf-8"));
+            os.close(fp);
+            filenames.append(path)
+        return filenames
+
+    def get_model_data(self, model_id):
+        url = "http://cimpy-server:8080/models/"+str(model_id)+"/export"
+        response = requests.get(url)
+        self.out.write("Response: " + str(response) + "\n")
+        json_str = str(response.json())
+        truncated_response = (json_str[:75] + '..') if len(json_str) > 75 else json_str
+        self.out.write("Response json (truncated): " + truncated_response + "\n")
+        return response.json()
+
+    def send_file_to_db(self, filename, filetype):
+        if filetype == "result":
+            db_file = ResultFile(self.analysis_id, filename)
+        elif filetype == "log":
+            db_file = LogFile(self.analysis_id, filename)
+        with open(filename) as f:
+            db_file.write(f.read())
+        db_file.close()
+
+    def execute_dpsimpy(self):
+        #initialise dpsimpy
+        logger = dpsimpy.Logger(self.analysis_name)
+        reader = dpsimpy.CIMReader(self.analysis_name)
+        system = reader.loadCIM(50, self.filenames, dpsimpy.Domain.SP, dpsimpy.PhaseType.Single)
+        sim = dpsimpy.Simulation(self.analysis_name)
+        sim.set_system(system)
+        sim.set_domain(dpsimpy.Domain.SP)
+        sim.set_solver(dpsimpy.Solver.NRP)
+        for node in system.nodes:
+            logger.log_attribute(node.name()+'.V', 'v', node);
+        sim.add_logger(logger)
+        sim.run()
+
+    def run(self):
+        try:
+            self.out.write("Running analysis: " + str(self.analysis_id) + "\n")
+            TaskExecutor.status_list[self.analysis_id] = TaskExecutor.Status.running.value
+
+            files = self.get_model_data(self.model_id)
+
+            # prepare the files for dpsim to read. we should make dpsim accept data blobs.
+            # however, that requires work in 3 projects and a technical discussion first.
+            self.filenames = SimRunner.create_files(files)
+
+            self.execute_dpsimpy()
+
+            # clean up the files that we created
+            for tempname in self.filenames:
+                os.unlink(tempname)
+
+            log_filename = "logs/" + self.analysis_name + ".log"
+            result_filename = "logs/" + self.analysis_name + ".csv"
+            self.send_file_to_db(log_filename, "log")
+            self.send_file_to_db(result_filename, "result")
+
+            TaskExecutor.status_list[self.analysis_id] = TaskExecutor.Status.complete.value
+
+        except Exception as e:
+            self.err.write("analysis failed: " + str(self.analysis_id) + " with: " + str(e) + os.linesep)
+            backtrace = traceback.format_exc()
+            self.err.write("backtrace: " + str(backtrace) + os.linesep)
+            TaskExecutor.status_list[self.analysis_id] = TaskExecutor.Status.error.value
+        finally:
+            self.err.close()
+            self.out.close()
+
 class TaskExecutor:
     """
         This singleton class polls the request queue and
@@ -163,76 +250,8 @@ class TaskExecutor:
     def wait_for_run_command(queue):
         while True:
             msg = queue.get()
-            analysis_id = msg['analysis_id']
-            out = LogFile(analysis_id, "debug/" + "Analysis_" + str(analysis_id) + ".out")
-            err = LogFile(analysis_id, "debug/" + "Analysis_" + str(analysis_id) + ".err")
-            try:
-                model_id = msg['model_id']
-                name = msg['name']
-                analysis_name = "Analysis_" + str(analysis_id)
-                out.write("Running analysis: " + str(analysis_id) + "\n")
-                TaskExecutor.status_list[analysis_id] = TaskExecutor.Status.running.value
-                logger = dpsimpy.Logger(analysis_name)
-                url = "http://cimpy-server:8080/models/"+str(model_id)+"/export"
-                response = requests.get(url)
-                out.write("Response: " + str(response) + "\n")
-                json_str = str(response.json())
-                truncated_response = (json_str[:75] + '..') if len(json_str) > 75 else json_str
-                out.write("Response json (truncated): " + truncated_response + "\n")
-                files = response.json()
-
-                # prepare the files for dpsim to read. we should make dpsim accept data blobs.
-                # however, that requires work in 3 projects and a technical discussion first.
-                filenames = []
-                for filedata in files:
-                    fp, path = tempfile.mkstemp(suffix=".xml", text=True)
-                    os.write(fp, bytes(filedata, "utf-8"));
-                    os.close(fp);
-                    filenames.append(path)
-
-                #initialise dpsimpy
-                reader = dpsimpy.CIMReader("Analysis_" + str(analysis_id))
-                system = reader.loadCIM(50, filenames, dpsimpy.Domain.SP, dpsimpy.PhaseType.Single)
-                sim = dpsimpy.Simulation("Analysis_" + str(analysis_id))
-                sim.set_system(system)
-                sim.set_domain(dpsimpy.Domain.SP)
-                sim.set_solver(dpsimpy.Solver.NRP)
-                for node in system.nodes:
-                    logger.log_attribute(node.name()+'.V', 'v', node);
-                sim.add_logger(logger)
-                sim.run()
-
-                # clean up the files that we created
-                for tempname in filenames:
-                    os.unlink(tempname)
-
-                analysis_name = "Analysis_" + str(analysis_id)
-                log_filename = "logs/" + analysis_name + ".log"
-                result_filename = "logs/" + analysis_name + ".csv"
-                try:
-                    result_file = ResultFile(analysis_id, result_filename)
-                    with open(result_filename) as f:
-                        result_file.write(f.read())
-                    result_file.close()
-                except Exception as e:
-                    self.error("Failed to save results: " + str(e))
-                try:
-                    log_file = LogFile(analysis_id, log_filename)
-                    with open(log_filename) as f:
-                        log_file.write(f.read())
-                    log_file.close()
-                except Exception as e:
-                    self.error("Failed to save log: " + str(e))
-
-                TaskExecutor.status_list[analysis_id] = TaskExecutor.Status.complete.value
-
-            except Exception as e:
-                TaskExecutor.status_list[analysis_id] = TaskExecutor.Status.error.value
-                err.write("analysis failed: " + str(analysis_id) + " with: " + str(e))
-                traceback.print_exc(file=err)
-            finally:
-                err.close()
-                out.close()
+            runner = SimRunner(msg)
+            result = runner.run()
 
 def add_analysis():  # noqa: E501
     """Add a new analysis
