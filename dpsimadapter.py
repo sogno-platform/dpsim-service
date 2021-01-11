@@ -206,6 +206,16 @@ class TaskExecutor:
             self.error("No analysis found with id: " + str(analysis_id))
             return -1
 
+    @staticmethod
+    def get_all_status():
+        analysis_id = 0
+        analyses = []
+        while TaskExecutor.status_list != None and \
+              TaskExecutor.Status(TaskExecutor.status_list[analysis_id]).name != TaskExecutor.Status.not_requested_yet.name:
+            analyses.append({ "id": analysis_id, "status": TaskExecutor.Status(TaskExecutor.status_list[analysis_id]).name })
+            analysis_id +=1
+        return analyses
+
     def get_debug_logs(self, analysis_id):
         if analysis_id >= len(self.tasks):
             return "Analysis id not recognised: " + str(analysis_id) + os.linesep
@@ -288,7 +298,7 @@ def get_all_analysis():  # noqa: E501
 
     :rtype: List[AnalysisResponse]
     """
-    raise Exception('Unimplemented')
+    return TaskExecutor.get_all_status()
 
 
 def get_analysis(id_):  # noqa: E501
@@ -301,7 +311,7 @@ def get_analysis(id_):  # noqa: E501
 
     :rtype: AnalysisResponse
     """
-    status = TaskExecutor.get_task_executor().get_status(id_)
+    status = TaskExecutor.get_status(id_)
     return { "status": status, "id": id_ }
 
 def get_analysis_results(id_):  # noqa: E501
