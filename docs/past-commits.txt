@@ -76,3 +76,12 @@ fad72e4ccdb0a56f4dc9f5b02afe5f1abaa21d61 Use redis for model db
 600e42678e9b27ebdcd21a774bfab59f116409b0 Move db skeleton code into separate module
 460c5488c86cc7494d94719f4f4c93f53078801a Change add_analysis content header to application/json
 b524f12b018d3a68220393852b0a04b1acc1302f Update Dockerfile so that it builds dpsim python module
+
+I, Markus Mirz hereby sign-off-by all of my past commits to this repo subject to the Developer Certificate of Origin (DCO), Version 1.1. In the past I have used emails: 16180422+m-mirz@users.noreply.github.com
+
+0c3279190c5c66f5ccd4b2d0a6752c7d0440d0a1 Update LICENSE
+547492e108ad29c958198b2b4fc885216c68b7ed Add LICENSE
+998829404d28404b5a9f91cf6b8aee7e3c92c3e3 merge dockerfiles
+09be73510c2973cc99a36c2777926d398f8a2284 fix dpsim dockerfile
+bde06172a9094ea1aa0a81598af69e627ed87437 dpsim docker: add build steps
+78eed2f34c2395c46e273cf3d3ccfe38ce2d76ef add dpsim dockerfile draft
