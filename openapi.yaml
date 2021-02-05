@@ -122,19 +122,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/Error"
 
-  /analysis/{id}/debug:
+  /analysis/debug:
     get:
       tags:
         - Static Analysis
       summary: Get specific analysis logs
       operationId: dpsimadapter.get_debug_logs
-      parameters:
-        - name: id
-          description: Analysis id
-          in: path
-          required: true
-          schema:
-            type: integer
       responses:
         '200':
           description: OK
