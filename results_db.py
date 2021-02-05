@@ -5,7 +5,7 @@ import redis
 # in the docker-compose.yaml file. For production this will
 # resolve via the kubernetes service name
 try:
-    redis_connection = redis.Redis("redis")
+    redis_connection = redis.Redis("redis-master")
 except redis.exceptions.ConnectionError:
     redis_connection = None
     print("WARNING: Unable to connect to redis. No problem on test.")

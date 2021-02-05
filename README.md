@@ -13,11 +13,46 @@ The API is specified in the [openapi.yaml](openapi.yaml).
 
 ## Usage
 
-To run the server, please execute the following from the root directory:
+### To run the server directly, please execute the following from the root directory:
 
 ```bash
 python3 server.py
 ```
+
+### To run in docker:
+
+```bash
+docker run --name=redis-master redis
+docker build -t dpsim-service .
+docker run dpsim-service
+# and in cim-service directory
+docker build -t cim-service .
+docker run cim-service
+```
+
+### To run in Kubernetes:
+
+This will become easier when we have uploaded the docker containers to docker hub.
+
+#### Install redis
+```bash
+helm repo add bitnami https://charts.bitnami.com/bitnami
+helm install redis bitnami/redis --values=helm/redis/values.yaml
+```
+
+#### Install docker registry
+```bash
+docker run -d -p 5000:5000 --restart=always --name registry registry:2
+```
+
+#### Install dpsim-service. This will need to be repeated for cim-service
+```bash
+docker build -t dpsim-service .
+docker tag dpsim-service:latest localhost:5000/dpsim-service:latest
+docker push localhost:5000/dpsim-service
+helm install dpsim-service helm/ --values helm/values.yaml
+```
+
 
 For manual interaction and a rendered specification open http://localhost:8080/ui/ in your Browser.
 

@@ -62,7 +62,7 @@ class SimRunner:
         return filenames
 
     def get_model_data(self, model_id):
-        url = "http://cimpy-server:8080/models/"+str(model_id)+"/export"
+        url = "http://cim-service:8080/models/"+str(model_id)+"/export"
         response = requests.get(url)
         self.out.write("Response: " + str(response) + "\n")
         json_str = str(response.json())
@@ -216,14 +216,8 @@ class TaskExecutor:
             analysis_id +=1
         return analyses
 
-    def get_debug_logs(self, analysis_id):
-        if analysis_id >= len(self.tasks):
-            return "Analysis id not recognised: " + str(analysis_id) + os.linesep
-
-        analysis_name = "Analysis_" + str(analysis_id)
-        files = glob( "debug/" + analysis_name + ".*")
-        files += glob( "debug/callback.*")
-        files += glob( "debug/main.*")
+    def get_debug_logs(self):
+        files = glob( "debug/*")
         log_string = ""
         for file_ in files:
             try:
@@ -344,7 +338,7 @@ def get_analysis_logs(id_):  # noqa: E501
     response.mimetype = "text/plain"
     return response
 
-def get_debug_logs(id_):  # noqa: E501
+def get_debug_logs():  # noqa: E501
     """Get specific analysis status and results
 
      # noqa: E501
@@ -355,6 +349,6 @@ def get_debug_logs(id_):  # noqa: E501
     :rtype: AnalysisResponse
     """
     taskExecutor = TaskExecutor.get_task_executor()
-    response = make_response(taskExecutor.get_debug_logs(id_))
+    response = make_response(taskExecutor.get_debug_logs())
     response.mimetype = "text/plain"
     return response
